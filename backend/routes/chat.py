@@ -16,7 +16,7 @@ from sqlalchemy import select
 from fastapi import Depends
 from middleware.auth import get_current_user_id
 from typing import Optional
-from integrations.embeddings import embed_text, combine_vectors, get_embedding_model
+from integrations.embeddings import embed_text, combine_vectors
 from services.taste_service import user_profile_to_taste_vector, infer_taste_from_text_hybrid, taste_similarity
 from integrations.pinecone_client import get_pinecone_index, maybe_upsert_ingredients_to_pinecone
 from services.recommendation_service import filter_and_rank_recommendations
@@ -267,10 +267,9 @@ def search_dish_in_db(dish_name: str) -> Optional[Dict[str, Any]]:
     # STEP 1: Search in Pinecone ingredients namespace
     try:
         pc_index = get_pinecone_index()
-        model = get_embedding_model()
 
-        # Create embedding for dish name
-        dish_embedding = model.encode(dish_name).tolist()
+        # Create embedding for dish name using OpenAI API
+        dish_embedding = embed_text(dish_name)
 
         # Search in ingredients namespace first
         result = pc_index.query(
@@ -409,13 +408,12 @@ def save_dish_to_db(dish_name: str, dish_info: Dict[str, Any]) -> bool:
     """
     try:
         pc_index = get_pinecone_index()
-        model = get_embedding_model()
 
         taste_profile = dish_info.get("taste_profile", {})
         ingredients = dish_info.get("ingredients", [])
 
-        # Create embedding for dish
-        dish_embedding = model.encode(dish_name).tolist()
+        # Create embedding for dish using OpenAI API
+        dish_embedding = embed_text(dish_name)
 
         # Create taste vector
         taste_vector = [
@@ -450,7 +448,7 @@ def save_dish_to_db(dish_name: str, dish_info: Dict[str, Any]) -> bool:
 
         # Add ingredient vectors (if not already in DB)
         for ingredient in ingredients[:10]:  # Limit to 10 ingredients
-            ingredient_embedding = model.encode(ingredient).tolist()
+            ingredient_embedding = embed_text(ingredient)
 
             # Use average taste profile for individual ingredients
             # (In a real system, you'd want to get specific taste profiles for each ingredient)
@@ -707,19 +705,24 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
     Main chat endpoint for restaurant recommendations.
     
     Flow:
-    1. First: Query Pinecone (pre-populated restaurants) → Return if results found
-    2. Fallback: If no results from Pinecone → Use Agents → Yelp API (live) → Return results
+    1. Use orchestrator agent system which routes to specialized agents
+    2. yelp_discovery_agent uses Yelp AI Chat API via yelp_search_tool
+    3. parse_yelp_response_tool maps Yelp response to frontend format
+    4. Return formatted recommendations
     
-    This ensures we use pre-populated data first (faster, cheaper) and only use live Yelp API
-    when needed (hackathon requirement: Yelp as primary source when Pinecone has no results).
+    The orchestrator coordinates multiple agents:
+    - yelp_discovery_agent: Searches restaurants using Yelp AI Chat API
+    - flavor_profile_agent: Handles taste matching and allergy filtering
+    - budget_agent: Handles price/budget queries
+    - beverage_agent: Recommends beer pairings
     """
-    # Setup: Direct service calls (required for Pinecone search)
+    # Setup: Direct service calls
     if not GROQ_API_KEY:
         raise HTTPException(status_code=500, detail="Missing GROQ_API_KEY")
 
     groq_client = get_groq_client()
     
-    # Ensure ingredients are loaded into Pinecone
+    # Ensure ingredients are loaded into Pinecone (for dish/ingredient search only)
     maybe_upsert_ingredients_to_pinecone()
 
     # Sync user metadata from request
@@ -857,92 +860,31 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
     restaurant_name_query = is_restaurant_menu_query(request.query)
     if restaurant_name_query:
         print(f"[DEBUG] Restaurant menu query detected: '{restaurant_name_query}'")
-
-        # Search for the restaurant in Pinecone
-        pc_index = get_pinecone_index()
-        model = get_embedding_model()
-
-        # Create embedding for restaurant name
-        restaurant_embedding = model.encode(restaurant_name_query).tolist()
-
-        # Search in restaurants namespace
-        result = pc_index.query(
-            vector=restaurant_embedding,
-            top_k=5,
-            include_metadata=True,
-            namespace="restaurants"
-        )
-
-        matches = result.get("matches", []) if isinstance(result, dict) else getattr(result, "matches", [])
-
-        # Find the best matching restaurant
-        best_match = None
-        best_score = 0
-
-        for match in matches:
-            meta = match.get("metadata") if isinstance(match, dict) else getattr(match, "metadata", {})
-            score = match.get("score", 0) if isinstance(match, dict) else getattr(match, "score", 0)
-            rest_name = meta.get("name", "")
-
-            # Check if restaurant name matches
-            if restaurant_name_query.lower() in rest_name.lower() or rest_name.lower() in restaurant_name_query.lower():
-                if score > best_score:
-                    best_score = score
-                    best_match = meta
-
-        if best_match:
-            # Found the restaurant - return its full menu
-            menu_items = best_match.get("menu_items", [])
-
-            # Format menu items as recommended dishes
-            recommended_dishes = []
-            for item in menu_items[:20]:  # Limit to 20 items
-                recommended_dishes.append({
-                    "name": item,
-                    "similarity": 50.0  # Neutral similarity since we're showing the full menu (50%)
-                })
-
-            return {
-                "response": {
-                    "text": f"Here's the menu for {best_match.get('name')}:"
-                },
-                "chat_id": request.chat_id,
-                "menu_buddy": {
-                    "recommendations": [{
-                        "name": best_match.get("name"),
-                        "rating": best_match.get("avg_rating"),
-                        "price_range": best_match.get("price_range"),
-                        "cuisine_types": best_match.get("cuisine_types", []),
-                        "recommended_dishes": recommended_dishes
-                    }]
-                }
-            }
-        else:
-            # Restaurant not found in Pinecone - fallback to Yelp API via agents
-            print(f"[DEBUG] Restaurant '{restaurant_name_query}' not found in Pinecone, falling back to Yelp API")
-            if AGENTS_AVAILABLE:
-                try:
-                    agent_response = orchestrator_process(request.query)
-                    return {
-                        "response": {
-                            "text": agent_response
-                        },
-                        "chat_id": request.chat_id,
-                        "menu_buddy": {
-                            "recommendations": []
-                        }
+        
+        # Use orchestrator to search for restaurant via Yelp AI Chat API
+        if AGENTS_AVAILABLE:
+            try:
+                agent_response = orchestrator_process(request.query)
+                return {
+                    "response": {
+                        "text": agent_response
+                    },
+                    "chat_id": request.chat_id,
+                    "menu_buddy": {
+                        "recommendations": []
                     }
-                except Exception as e:
-                    print(f"⚠️ Agent system error: {e}, showing no results message")
-            
-            # If agents unavailable or failed
-            return {
-                "response": {
-                    "text": f"Sorry, I couldn't find a restaurant named '{restaurant_name_query}' in our database. Could you try a different name or ask for dish recommendations instead?"
-                },
-                "chat_id": request.chat_id,
-                "menu_buddy": {"recommendations": []}
-            }
+                }
+            except Exception as e:
+                print(f"⚠️ Agent system error: {e}")
+        
+        # If agents unavailable or failed
+        return {
+            "response": {
+                "text": f"Sorry, I couldn't find a restaurant named '{restaurant_name_query}'. Could you try a different name or ask for dish recommendations instead?"
+            },
+            "chat_id": request.chat_id,
+            "menu_buddy": {"recommendations": []}
+        }
 
     # Check if this is a dish-specific query (not at a specific restaurant)
     dish_query = is_dish_query(request.query)
@@ -987,162 +929,96 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
                     }
                 }
 
-        # STEP 3: Search for restaurants that have this dish
+        # STEP 3: Search for restaurants that have this dish using orchestrator
         try:
-            pc_index = get_pinecone_index()
-            # Use dish embedding to find restaurants with similar dishes
-            model = get_embedding_model()
-            dish_embedding = model.encode(dish_query).tolist()
+            # Build query for orchestrator
+            dish_search_query = f"restaurants with {dish_query}"
+            if fallback_location:
+                dish_search_query += f" in {fallback_location}"
             
-            # Search restaurants using dish embedding (semantic search)
-            all_restaurants = pc_index.query(
-                vector=dish_embedding,
-                top_k=500,  # Fetch more restaurants to ensure we find all with this dish
-                include_metadata=True,
-                namespace="restaurants"
-            )
-            matches = all_restaurants.get("matches", []) if isinstance(all_restaurants, dict) else getattr(all_restaurants, "matches", [])
-
-            # Search for restaurants that have this dish
-            restaurants_with_dish = []
-            for m in matches:
-                meta = m.get("metadata") if isinstance(m, dict) else getattr(m, "metadata", {})
-                menu_items = meta.get("menu_items", [])
-
-                # Check if dish exists in menu
-                for menu_item in menu_items:
-                    if dish_query.lower() in menu_item.lower() or menu_item.lower() in dish_query.lower():
-                        restaurants_with_dish.append({
-                            "name": meta.get("name"),
-                            "rating": meta.get("avg_rating"),
-                            "price_range": meta.get("price_range"),
-                            "cuisine_types": meta.get("cuisine_types", []),
-                            "dish": menu_item,
-                            "metadata": meta
-                        })
-                        break  # Only add restaurant once
-
-            if not restaurants_with_dish:
-                # Dish not found in restaurants - but we have dish info from DB/Groq
-                print(f"[DEBUG] Dish '{dish_query}' not found in any restaurant")
-
-                if dish_in_db:
-                    # We have dish info, use it for taste-based recommendations
-                    print(f"[DEBUG] Using dish taste profile for recommendations")
-                    dish_taste_vec = dish_in_db.get("taste_vector", [0.0] * 6)
-                    # Combine user taste with dish taste
-                    user_taste_vec = combine_vectors(user_taste_vec, dish_taste_vec, secondary_weight=0.6)
-
-                # Set flag to modify response text
-                dish_not_found = True
-                dish_not_found_name = dish_query
-            else:
-                # Dish found - return restaurants that have it
-                print(f"[DEBUG] Found '{dish_query}' at {len(restaurants_with_dish)} restaurants")
-
-                # Apply location filtering
-                from services.restaurant_service import check_location_match
-                if fallback_location:
-                    print(f"[DEBUG] Applying location filter to dish results: {fallback_location}")
-                    filtered_restaurants = []
-                    for rest in restaurants_with_dish:
-                        loc_json = rest["metadata"].get("location_json", "{}")
-                        try:
-                            import json
-                            location = json.loads(loc_json) if isinstance(loc_json, str) else loc_json
-                            loc_str = location
-                            if isinstance(location, dict):
-                                parts = []
-                                for key in ["address", "city", "state", "zip_code", "country"]:
-                                    if key in location and location[key]:
-                                        parts.append(str(location[key]))
-                                if parts:
-                                    loc_str = ", ".join(parts)
-                                else:
-                                    loc_str = ", ".join([str(v) for v in location.values() if isinstance(v, (str, int))])
-                            
-                            if check_location_match(fallback_location, str(loc_str)):
-                                print(f"[DEBUG] Location match: {rest['name']} in {loc_str}")
-                                filtered_restaurants.append(rest)
-                            else:
-                                print(f"[DEBUG] Filtered out {rest['name']} - wrong location: {loc_str}")
-                        except Exception as e:
-                            print(f"[DEBUG] Error checking location for {rest['name']}: {e}")
-                            continue
+            print(f"[DEBUG] Using orchestrator to search for restaurants with dish '{dish_query}'")
+            
+            if dish_in_db:
+                # We have dish info, use it for taste-based recommendations
+                print(f"[DEBUG] Using dish taste profile for recommendations")
+                dish_taste_vec = dish_in_db.get("taste_vector", [0.0] * 6)
+                # Combine user taste with dish taste
+                user_taste_vec = combine_vectors(user_taste_vec, dish_taste_vec, secondary_weight=0.6)
+            
+            # Use orchestrator to find restaurants via Yelp AI Chat API
+            if AGENTS_AVAILABLE:
+                try:
+                    agent_response = orchestrator_process(dish_search_query)
+                    # Try to extract structured data from response
+                    try:
+                        import re
+                        json_match = re.search(r'\{.*"restaurants".*\}', agent_response, re.DOTALL)
+                        if json_match:
+                            parsed_data = json.loads(json_match.group())
+                            restaurants = parsed_data.get("restaurants", [])
+                            if restaurants:
+                                # Format for frontend
+                                ranked_restaurants = []
+                                for rest in restaurants[:final_max_results]:
+                                    # Ensure the searched dish is in recommended_dishes
+                                    recommended_dishes = rest.get("recommended_dishes", [])
+                                    dish_found = False
+                                    for dish in recommended_dishes:
+                                        dish_name = dish.get("name", "").lower()
+                                        if dish_query.lower() in dish_name or dish_name in dish_query.lower():
+                                            dish_found = True
+                                            recommended_dishes.remove(dish)
+                                            recommended_dishes.insert(0, dish)
+                                            break
+                                    if not dish_found:
+                                        dish_taste_vec = infer_taste_from_text_hybrid(dish_query, semantic=USE_SEMANTIC_DISH_TASTE)
+                                        similarity = taste_similarity(user_taste_vec, dish_taste_vec)
+                                        recommended_dishes.insert(0, {
+                                            "name": dish_query,
+                                            "similarity": round(similarity * 100, 1)
+                                        })
+                                    
+                                    ranked_restaurants.append({
+                                        "name": rest.get("name"),
+                                        "rating": rest.get("avg_rating"),
+                                        "price_range": rest.get("price_range"),
+                                        "cuisine_types": rest.get("cuisine_types", []),
+                                        "recommended_dishes": recommended_dishes[:5]
+                                    })
+                                
+                                ranked_restaurants.sort(key=lambda x: x.get("rating", 0) or 0, reverse=True)
+                                
+                                return {
+                                    "response": {
+                                        "text": f"Great choice! I found restaurants that serve '{dish_query}'. Here are the top-rated ones:"
+                                    },
+                                    "chat_id": parsed_data.get("chat_id") or request.chat_id,
+                                    "menu_buddy": {"recommendations": ranked_restaurants}
+                                }
+                    except Exception as e:
+                        print(f"[DEBUG] Could not parse structured data: {e}")
                     
-                    restaurants_with_dish = filtered_restaurants
-                    print(f"[DEBUG] After location filter: {len(restaurants_with_dish)} restaurants")
-
-                # Rank by rating and taste similarity
-                from services.recommendation_service import dish_recommendations_for_restaurant
-                ranked_restaurants = []
-                for rest in restaurants_with_dish[:10]:  # Limit to top 10
-                    # Get the matched dish
-                    matched_dish = rest.get("dish", dish_query)
-
-                    # Get all recommended dishes (including the matched one)
-                    menu_items = rest["metadata"].get("menu_items", [])
-                    all_dishes = dish_recommendations_for_restaurant(
-                        menu_items=menu_items,
-                        user_taste_vec=user_taste_vec,
-                        diet_type=diet_type,
-                        allergies=allergies,
-                        top_n=10  # Get more to ensure we have the matched dish
-                    )
-
-                    # Find the matched dish in the recommendations (it will have proper similarity)
-                    recommended_dishes = []
-                    matched_dish_obj = None
-                    
-                    for dish in all_dishes:
-                        dish_name = dish.get("name") if isinstance(dish, dict) else dish
-                        if dish_name.lower() == matched_dish.lower():
-                            matched_dish_obj = dish
-                            break
-                    
-                    # Put matched dish first (with its calculated similarity)
-                    if matched_dish_obj:
-                        recommended_dishes.append(matched_dish_obj)
-                    else:
-                        # Calculate similarity for matched dish if not in recommendations
-                        dish_taste_vec = infer_taste_from_text_hybrid(matched_dish, semantic=USE_SEMANTIC_DISH_TASTE)
-                        similarity = taste_similarity(user_taste_vec, dish_taste_vec)
-                        recommended_dishes.append({
-                            "name": matched_dish, 
-                            "similarity": round(similarity * 100, 1)
-                        })
-                    
-                    # Add other dishes
-                    for dish in all_dishes:
-                        dish_name = dish.get("name") if isinstance(dish, dict) else dish
-                        if dish_name.lower() != matched_dish.lower():
-                            recommended_dishes.append(dish)
-                            if len(recommended_dishes) >= 5:  # Limit to 5 total
-                                break
-
-                    ranked_restaurants.append({
-                        "name": rest["name"],
-                        "rating": rest["rating"],
-                        "price_range": rest["price_range"],
-                        "cuisine_types": rest["cuisine_types"],
-                        "recommended_dishes": recommended_dishes
-                    })
-
-                # Sort by rating
-                ranked_restaurants.sort(key=lambda x: x.get("rating", 0), reverse=True)
-
-                return {
-                    "response": {
-                        "text": f"Great choice! I found '{dish_query}' at {len(restaurants_with_dish)} restaurants. Here are the top-rated ones:"
-                    },
-                    "chat_id": request.chat_id,
-                    "menu_buddy": {"recommendations": ranked_restaurants[:final_max_results]}
-                }
+                    # Return text response if structured data not available
+                    return {
+                        "response": {
+                            "text": agent_response
+                        },
+                        "chat_id": request.chat_id,
+                        "menu_buddy": {"recommendations": []}
+                    }
+                except Exception as e:
+                    print(f"⚠️ Orchestrator error: {e}")
+            
+            # If orchestrator unavailable or dish not found, set flag
+            dish_not_found = True
+            dish_not_found_name = dish_query
 
         except Exception as e:
             print(f"[DEBUG] Error in dish query: {e}")
             import traceback
             traceback.print_exc()
+            dish_not_found = True
+            dish_not_found_name = dish_query
 
     # Check if this is a specific query (dish at specific restaurant)
     specific_query = parse_specific_query(request.query)
@@ -1150,89 +1026,76 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
         dish_name, restaurant_name = specific_query
         print(f"[DEBUG] Specific query detected: dish='{dish_name}', restaurant='{restaurant_name}'")
 
-        # Search for the specific restaurant and dish
-        try:
-            pc_index = get_pinecone_index()
-            # Search for the restaurant
-            restaurant_vec = embed_text(restaurant_name)
-            query_res = pc_index.query(vector=restaurant_vec, top_k=20, include_metadata=True, namespace="restaurants")
-            matches = query_res.get("matches", []) if isinstance(query_res, dict) else getattr(query_res, "matches", [])
-
-            # Find the matching restaurant
-            target_restaurant = None
-            for m in matches:
-                meta = m.get("metadata") if isinstance(m, dict) else getattr(m, "metadata", {})
-                rest_name = meta.get("name", "").lower()
-                if restaurant_name.lower() in rest_name or rest_name in restaurant_name.lower():
-                    target_restaurant = meta
-                    target_restaurant["id"] = m.get("id") if isinstance(m, dict) else getattr(m, "id", None)
-                    break
-
-            if not target_restaurant:
-                # Restaurant not found in Pinecone - fallback to Yelp API via agents
-                print(f"[DEBUG] Restaurant '{restaurant_name}' not found in Pinecone, falling back to Yelp API")
-                if AGENTS_AVAILABLE:
-                    try:
-                        agent_response = orchestrator_process(request.query)
-                        return {
-                            "response": {
-                                "text": agent_response
-                            },
-                            "chat_id": request.chat_id,
-                            "menu_buddy": {
-                                "recommendations": []
-                            }
-                        }
-                    except Exception as e:
-                        print(f"⚠️ Agent system error: {e}, showing no results message")
+        # Use orchestrator to search for specific dish at restaurant via Yelp AI Chat API
+        if AGENTS_AVAILABLE:
+            try:
+                agent_response = orchestrator_process(request.query)
+                # Try to extract structured data
+                try:
+                    import re
+                    json_match = re.search(r'\{.*"restaurants".*\}', agent_response, re.DOTALL)
+                    if json_match:
+                        parsed_data = json.loads(json_match.group())
+                        restaurants = parsed_data.get("restaurants", [])
+                        if restaurants:
+                            # Find matching restaurant
+                            target_restaurant = None
+                            for rest in restaurants:
+                                rest_name = rest.get("name", "").lower()
+                                if restaurant_name.lower() in rest_name or rest_name in restaurant_name.lower():
+                                    target_restaurant = rest
+                                    break
+                            
+                            if target_restaurant:
+                                # Check if dish is in recommended_dishes
+                                matching_dish = None
+                                recommended_dishes = target_restaurant.get("recommended_dishes", [])
+                                for dish in recommended_dishes:
+                                    dish_obj_name = dish.get("name", "").lower()
+                                    if dish_name.lower() in dish_obj_name or dish_obj_name in dish_name.lower():
+                                        matching_dish = dish.get("name")
+                                        break
+                                
+                                if not matching_dish:
+                                    matching_dish = dish_name
+                                
+                                return {
+                                    "response": {
+                                        "text": f"{matching_dish} is available at {target_restaurant.get('name')} (Rating: {target_restaurant.get('avg_rating', 'N/A')}/5)"
+                                    },
+                                    "chat_id": parsed_data.get("chat_id") or request.chat_id,
+                                    "menu_buddy": {
+                                        "recommendations": [{
+                                            "name": target_restaurant.get("name"),
+                                            "rating": target_restaurant.get("avg_rating"),
+                                            "price_range": target_restaurant.get("price_range"),
+                                            "cuisine_types": target_restaurant.get("cuisine_types", []),
+                                            "recommended_dishes": [{"name": matching_dish, "similarity": 80.0}]
+                                        }]
+                                    }
+                                }
+                except Exception as e:
+                    print(f"[DEBUG] Could not parse structured data: {e}")
                 
-                # If agents unavailable or failed
+                # Return text response
                 return {
                     "response": {
-                        "text": f"Sorry, I couldn't find a restaurant named '{restaurant_name}' in our database."
+                        "text": agent_response
                     },
                     "chat_id": request.chat_id,
                     "menu_buddy": {"recommendations": []}
                 }
-
-            # Find the specific dish in the restaurant's menu
-            menu_items = target_restaurant.get("menu_items", [])
-            matching_dish = None
-            for dish in menu_items:
-                if dish_name.lower() in dish.lower() or dish.lower() in dish_name.lower():
-                    matching_dish = dish
-                    break
-
-            if not matching_dish:
-                return {
-                    "response": {
-                        "text": f"Sorry, '{dish_name}' is not available at {target_restaurant.get('name')}. Available dishes: {', '.join(menu_items[:5])}"
-                    },
-                    "chat_id": request.chat_id,
-                    "menu_buddy": {"recommendations": []}
-                }
-
-            # Return minimal response with just the dish and restaurant
-            avg_rating = target_restaurant.get("avg_rating", "N/A")
-            return {
-                "response": {
-                    "text": f"{matching_dish} is available at {target_restaurant.get('name')} (Rating: {avg_rating}/5)"
-                },
-                "chat_id": request.chat_id,
-                "menu_buddy": {
-                    "recommendations": [{
-                        "restaurant_name": target_restaurant.get("name"),
-                        "dish_name": matching_dish,
-                        "rating": avg_rating,
-                        "price_range": target_restaurant.get("price_range"),
-                        "location": target_restaurant.get("location")
-                    }]
-                }
-            }
-        except Exception as e:
-            print(f"[DEBUG] Error in specific query: {e}")
-            import traceback
-            traceback.print_exc()
+            except Exception as e:
+                print(f"⚠️ Orchestrator error: {e}")
+        
+        # If orchestrator unavailable
+        return {
+            "response": {
+                "text": f"Sorry, I couldn't find '{dish_name}' at '{restaurant_name}'. Please try again."
+            },
+            "chat_id": request.chat_id,
+            "menu_buddy": {"recommendations": []}
+        }
 
     # Check if location is provided (for general queries)
     if is_first_turn and not fallback_location:
@@ -1245,18 +1108,23 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
             "chat_id": request.chat_id
         }
 
-    # Query Pinecone for restaurant recommendations
-    print(f"[DEBUG] Querying Pinecone for restaurant recommendations")
-
+    # Use orchestrator with Yelp AI Chat API for restaurant recommendations
+    print(f"[DEBUG] Using orchestrator with Yelp AI Chat API for restaurant recommendations")
+    
+    # Build query for orchestrator (include location if available)
+    location_to_filter = query_location if query_location else fallback_location
+    orchestrator_query = request.query
+    if location_to_filter and location_to_filter.lower() not in orchestrator_query.lower():
+        orchestrator_query = f"{request.query} in {location_to_filter}"
+    
     # Initialize response structure
     if dish_not_found:
-        # Check if multiple dishes were mentioned (contains "and" or ",")
         if " and " in dish_not_found_name or "," in dish_not_found_name:
             initial_text = f"Sorry, I couldn't find '{dish_not_found_name}' at our partner restaurants. However, based on your preferences and the taste profile of these dishes, here are some recommendations you might enjoy:"
         else:
             initial_text = f"Sorry, I couldn't find '{dish_not_found_name}' at our partner restaurants. However, based on your preferences and the taste profile of this dish, here are some recommendations you might enjoy:"
     else:
-        initial_text = f"Here are some great restaurant recommendations for you in {fallback_location}!"
+        initial_text = f"Here are some great restaurant recommendations for you in {location_to_filter or 'your area'}!"
 
     ai_json = {
         "response": {
@@ -1266,109 +1134,111 @@ async def chat_endpoint(request: ChatRequest) -> Dict[str, Any]:
     }
 
     ranked = []
-    try:
-        pc_index = get_pinecone_index()
-        qvec = embed_text(request.query)
-        
-        # IMPORTANT: When filtering by location, fetch MORE results since many will be filtered out
-        # Use location from query if available, otherwise use fallback_location
-        location_to_filter = query_location if query_location else fallback_location
-        
-        # Increase top_k significantly when location filter is active
-        if location_to_filter:
-            top_k = max(final_max_results * 10, 50)  # Fetch 10x more to account for location filtering
-            print(f"[DEBUG] Location filter active, fetching top_k={top_k} (will filter to {final_max_results})")
-        else:
-            top_k = max(final_max_results, 10)
+    
+    # Use orchestrator to get restaurant recommendations via Yelp AI Chat API
+    if AGENTS_AVAILABLE:
+        try:
+            print(f"[DEBUG] Calling orchestrator with query: '{orchestrator_query}'")
+            print(f"[DEBUG] User preferences - Allergies: {allergies}, Diet: {diet_type}, Location: {location_to_filter}")
             
-        print(f"[DEBUG] Querying Pinecone with top_k={top_k}")
-        query_res = pc_index.query(vector=qvec, top_k=top_k, include_metadata=True, namespace="restaurants")
-        matches = query_res.get("matches", []) if isinstance(query_res, dict) else getattr(query_res, "matches", [])
-        print(f"[DEBUG] Pinecone returned {len(matches)} matches")
-        
-        # Extract ingredients from query for ingredient-based boosting
-        query_ingredients = extract_ingredients_from_query(request.query)
-        if query_ingredients:
-            print(f"[DEBUG] Detected ingredients in query: {query_ingredients}")
-
-        # Filter and rank recommendations
-        if location_to_filter:
-            print(f"[DEBUG] Applying location filter: {location_to_filter}")
-        else:
-            print(f"[DEBUG] No location filter applied")
-
-        ranked = filter_and_rank_recommendations(
-            matches=matches,
-            user_taste_vec=user_taste_vec,
-            favorite_dishes=favorite_dishes,
-            diet_type=diet_type,
-            allergies=allergies,
-            max_results=final_max_results,
-            query_text=request.query,
-            location_filter=location_to_filter,
-            cuisine_filter=query_cuisine,
-            query_ingredients=query_ingredients
-        )
-
-        print(f"[DEBUG] Total ranked restaurants: {len(ranked)}")
-        
-        # If no results with cuisine filter, retry without it
-        if len(ranked) == 0 and query_cuisine:
-            print(f"[DEBUG] No {query_cuisine} restaurants found, retrying without cuisine filter")
-            ranked = filter_and_rank_recommendations(
-                matches=matches,
-                user_taste_vec=user_taste_vec,
-                favorite_dishes=favorite_dishes,
-                diet_type=diet_type,
-                allergies=allergies,
-                max_results=final_max_results,
-                query_text=request.query,
-                location_filter=location_to_filter,
-                cuisine_filter=None  # Retry without cuisine filter
-            )
-            print(f"[DEBUG] Found {len(ranked)} restaurants without cuisine filter")
+            # Build comprehensive query for orchestrator with all user preferences
+            enhanced_query = orchestrator_query
+            if allergies:
+                enhanced_query += f" (allergies: {', '.join(allergies)})"
+            if diet_type and diet_type != "mix":
+                enhanced_query += f" ({diet_type} diet)"
             
-            # Update the response message to inform user
-            if len(ranked) > 0:
-                location_name = location_to_filter or "your area"
-                diet_label = "vegetarian " if diet_type == 'veg' else ""
-                initial_text = f"I couldn't find any {query_cuisine.title()} restaurants in {location_name}, but here are some other great {diet_label}options nearby:"
-                ai_json["response"]["text"] = initial_text
-        
-        print(f"[DEBUG] Returning top {len(ranked)} recommendations")
-        
-    except Exception as e:
-        print(f"[DEBUG] Error in ranking: {e}")
-        import traceback
-        traceback.print_exc()
-        ranked = []
-
-    # Check if no results found from Pinecone
-    if len(ranked) == 0:
-        # Fallback to Yelp API via agents (hackathon requirement: Yelp as primary source)
-        print(f"[DEBUG] No results from Pinecone, falling back to Yelp API via agents")
-        if AGENTS_AVAILABLE:
+            agent_response = orchestrator_process(enhanced_query)
+            print(f"[DEBUG] Orchestrator returned response (length: {len(agent_response)} chars)")
+            
+            # Try to extract structured data from orchestrator response
+            # The yelp_discovery_agent uses parse_yelp_response_tool which returns JSON
+            # This JSON might be embedded in the agent's text response
             try:
-                # Use orchestrator agent with Yelp API
-                agent_response = orchestrator_process(request.query)
+                # Look for JSON blocks in the response (parse_yelp_response_tool returns JSON)
+                import re
+                # Try multiple extraction strategies
+                parsed_data = None
                 
-                # Parse agent response and format for frontend
+                # Strategy 1: Look for JSON in markdown code blocks
+                json_block_pattern = r'```(?:json)?\s*(\{.*?"restaurants".*?\})\s*```'
+                json_block_match = re.search(json_block_pattern, agent_response, re.DOTALL)
+                if json_block_match:
+                    try:
+                        parsed_data = json.loads(json_block_match.group(1))
+                        if "restaurants" in parsed_data:
+                            print(f"[DEBUG] Found structured data in code block with {len(parsed_data.get('restaurants', []))} restaurants")
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Strategy 2: Find JSON object by matching braces (handles nested structures)
+                if not parsed_data:
+                    start_idx = agent_response.find('{"restaurants"')
+                    if start_idx == -1:
+                        start_idx = agent_response.find('{\n  "restaurants"')
+                    if start_idx != -1:
+                        # Find the matching closing brace by counting
+                        brace_count = 0
+                        end_idx = start_idx
+                        for i in range(start_idx, len(agent_response)):
+                            if agent_response[i] == '{':
+                                brace_count += 1
+                            elif agent_response[i] == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    end_idx = i + 1
+                                    break
+                        
+                        if end_idx > start_idx:
+                            json_str = agent_response[start_idx:end_idx]
+                            try:
+                                parsed_data = json.loads(json_str)
+                                if "restaurants" in parsed_data:
+                                    print(f"[DEBUG] Found structured data via brace matching with {len(parsed_data.get('restaurants', []))} restaurants")
+                            except json.JSONDecodeError as e:
+                                print(f"[DEBUG] JSON parse error: {e}")
+                                pass
+                
+                if parsed_data and "restaurants" in parsed_data:
+                    restaurants = parsed_data.get("restaurants", [])
+                    if restaurants:
+                        ranked = restaurants[:final_max_results]
+                        response_text = parsed_data.get("response_text", agent_response)
+                        chat_id = parsed_data.get("chat_id") or request.chat_id
+                        ai_json["response"]["text"] = response_text
+                        ai_json["chat_id"] = chat_id
+                        print(f"[DEBUG] Extracted {len(ranked)} restaurants from orchestrator response")
+            except Exception as e:
+                print(f"[DEBUG] Could not parse structured data from orchestrator response: {e}")
+                import traceback
+                traceback.print_exc()
+                # Use text response as-is
+                ai_json["response"]["text"] = agent_response
+            
+            # If no structured data found, return text response
+            if not ranked:
                 return {
                     "response": {
                         "text": agent_response
                     },
                     "chat_id": request.chat_id,
                     "menu_buddy": {
-                        "recommendations": []  # Agent will provide recommendations in text
+                        "recommendations": []
                     }
                 }
-            except Exception as e:
-                print(f"⚠️ Agent system error: {e}, continuing with no results message")
-                # Fall through to no results message
-        
-        # If agents unavailable or failed, show no results message
+        except Exception as e:
+            print(f"⚠️ Orchestrator error: {e}")
+            import traceback
+            traceback.print_exc()
+            ranked = []
+    else:
+        print(f"⚠️ Agent system not available")
+        ranked = []
+
+    # If no results from orchestrator
+    if len(ranked) == 0:
         if dish_not_found:
-            no_results_msg = f"Sorry, I couldn't find '{dish_not_found_name}' or any similar dishes at our partner restaurants"
+            no_results_msg = f"Sorry, I couldn't find '{dish_not_found_name}' or any similar dishes"
             if location_to_filter:
                 no_results_msg += f" in {location_to_filter}"
             if allergies:

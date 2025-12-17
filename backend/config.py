@@ -11,9 +11,13 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "menu-buddy")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+YELP_API_KEY = os.getenv("YELP_API_KEY", "syHjCBQQvrY2OoDSuZq7QC2WEV29k0xlEOCG1QHlyPVMVqMHuXAr9dWR5HerBx8JIezH3Wx3jcaArAUsPHvebAM4VVFaTl2pzQYKp7_IjzS8kHnYUkEWFw6xlhFCaXYx")
+YELP_CLIENT_ID = os.getenv("YELP_CLIENT_ID", "a8Z4PXeynFxXMDFt3iGGNQ")
 
 # Model Configuration
-SENTENCE_TRANSFORMER_MODEL = os.getenv("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
+# OpenAI embedding model (text-embedding-3-small has 1536 dimensions)
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
 # Feature Flags
 USE_SEMANTIC_DISH_TASTE = os.getenv("USE_SEMANTIC_DISH_TASTE", "true").lower() in {"1", "true", "yes", "y"}

@@ -17,12 +17,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies
-# gcc, g++ for compiling Python packages
-# git for sentence-transformers model downloads
+# gcc, g++ for compiling Python packages (may still be needed for some packages)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file first for better caching

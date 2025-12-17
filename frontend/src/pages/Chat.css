@@ -1,37 +1,171 @@
-.chat-page {
+.gusto-app {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  position: relative;
+  overflow-x: hidden;
 }
 
-.chat-header {
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #e9ecef;
+/* Ghibli-style background elements */
+.gusto-app::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(255, 154, 158, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(254, 207, 239, 0.1) 0%, transparent 50%);
+  animation: float 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.chat-header h1 {
+.gusto-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 20px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.gusto-title {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
-  color: #333;
-  font-size: 2rem;
 }
 
-.chat-container {
+
+.gusto-main {
   flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.chat-bar-section {
+  margin-bottom: 32px;
+}
+
+.story-mode-section {
+  margin-top: 40px;
+}
+
+.story-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.story-header h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #2d3748;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 12px 24px;
+  border-radius: 12px;
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.story-cards {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  gap: 0;
 }
 
-@media (max-width: 768px) {
-  .chat-page {
-    padding: 1rem;
+.scroll-indicator {
+  text-align: center;
+  padding: 24px;
+  color: #8b5a9f;
+  font-style: italic;
+  font-size: 16px;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
   }
-  
-  .chat-header h1 {
-    font-size: 1.5rem;
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: #8b5a9f;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.empty-state p {
+  font-size: 18px;
+  font-style: italic;
+}
+
+.gusto-footer {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 20px 32px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .gusto-main {
+    padding: 16px;
+  }
+
+  .gusto-header {
+    padding: 16px 20px;
+  }
+
+  .gusto-title {
+    font-size: 24px;
+  }
+
+  .story-card {
+    padding: 24px;
+  }
+
+  .restaurant-photo {
+    height: 250px;
+  }
+
+  .chat-input-form {
+    padding: 12px 16px;
   }
 }

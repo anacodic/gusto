@@ -29,15 +29,16 @@ def get_yelp_client() -> Optional[YelpAPIClient]:
 
 
 @tool
-def yelp_search_tool(query: str, location: str = None) -> str:
+def yelp_search_tool(query: str, location: str = None, chat_id: str = None) -> str:
     """Search for restaurants using Yelp AI Chat API.
     
     Args:
         query: Search query (e.g., "spicy Thai restaurants")
         location: Location string (e.g., "Boston, MA") - will be added to query
+        chat_id: Chat ID for multi-turn conversations (optional)
     
     Returns:
-        JSON string with restaurant data
+        JSON string with restaurant data from Yelp AI Chat API
     """
     print(f"🔍 [Yelp Tool] Searching: '{query}'" + (f" in {location}" if location else ""))
     try:
@@ -53,9 +54,9 @@ def yelp_search_tool(query: str, location: str = None) -> str:
                 print(f"📍 [Yelp Tool] Added location to query: '{query}'")
         
         print(f"📡 [Yelp Tool] Calling Yelp AI Chat API...")
-        result = yelp_client.ai_chat_search(query=query)
+        result = yelp_client.ai_chat_search(query=query, chat_id=chat_id)
         print(f"✅ [Yelp Tool] Received response from Yelp API")
         return json.dumps(result, indent=2)
     except Exception as e:
         print(f"❌ [Yelp Tool] Error: {str(e)}")
-        return f"Error: {str(e)}"
+        return json.dumps({"error": str(e)})

@@ -6,7 +6,7 @@ from pinecone import Pinecone
 from config import PINECONE_API_KEY, PINECONE_INDEX
 import csv
 from pathlib import Path
-from integrations.embeddings import embed_text, get_embedding_model
+from integrations.embeddings import embed_text
 
 
 # Global Pinecone index instance
@@ -30,7 +30,7 @@ def get_pinecone_index():
             from pinecone import ServerlessSpec
             pc.create_index(
                 name=PINECONE_INDEX,
-                dimension=384,  # all-MiniLM-L6-v2 dimension
+                dimension=1536,  # OpenAI text-embedding-3-small dimension
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
@@ -89,7 +89,6 @@ def maybe_upsert_ingredients_to_pinecone() -> None:
     
     try:
         index = get_pinecone_index()
-        model = get_embedding_model()
         
         # Check if ingredients already exist
         stats = index.describe_index_stats()
@@ -109,8 +108,8 @@ def maybe_upsert_ingredients_to_pinecone() -> None:
                 if not ingredient:
                     continue
                 
-                # Create embedding
-                embedding = model.encode(ingredient).tolist()
+                # Create embedding using OpenAI API
+                embedding = embed_text(ingredient)
                 
                 # Create metadata
                 metadata = {

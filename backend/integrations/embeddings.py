@@ -1,39 +1,63 @@
 """
-Embedding and vector operations using SentenceTransformer.
+Embedding and vector operations using OpenAI API.
 """
 from typing import List, Optional
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from openai import OpenAI
+from config import OPENAI_API_KEY
 
-# Optional import - app can run without sentence-transformers
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMER_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMER_AVAILABLE = False
-    SentenceTransformer = None
+# Global OpenAI client instance
+_openai_client: Optional[OpenAI] = None
 
-from config import SENTENCE_TRANSFORMER_MODEL
+# OpenAI embedding model - text-embedding-3-small (1536 dimensions)
+EMBEDDING_MODEL = "text-embedding-3-small"
 
 
-# Global model instance
-_embedding_model: Optional[object] = None
+def get_openai_client() -> OpenAI:
+    """Get or initialize the OpenAI client."""
+    global _openai_client
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY not set. Please set it in your .env file.")
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
 
 
 def get_embedding_model():
-    """Get or initialize the SentenceTransformer model."""
-    global _embedding_model
-    if not SENTENCE_TRANSFORMER_AVAILABLE:
-        raise ImportError("sentence-transformers not installed. Install with: pip install sentence-transformers")
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer(SENTENCE_TRANSFORMER_MODEL)
-    return _embedding_model
+    """
+    Compatibility function - returns OpenAI client for backward compatibility.
+    Note: OpenAI embeddings are API-based, not a local model.
+    """
+    return get_openai_client()
 
 
 def embed_text(text: str) -> List[float]:
-    """Generate embedding vector for text."""
-    model = get_embedding_model()
-    return model.encode(text).tolist()
+    """
+    Generate embedding vector for text using OpenAI API.
+    
+    Args:
+        text: Text to embed
+        
+    Returns:
+        List of floats representing the embedding vector (1536 dimensions)
+    """
+    if not text or not text.strip():
+        # Return zero vector if text is empty
+        return [0.0] * 1536
+    
+    client = get_openai_client()
+    
+    try:
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=text.strip()
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"[ERROR] Failed to generate embedding: {e}")
+        # Return zero vector on error
+        return [0.0] * 1536
 
 
 def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:

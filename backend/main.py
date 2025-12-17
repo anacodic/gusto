@@ -5,8 +5,8 @@ Modularized version with clean separation of concerns.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import CORS_ORIGINS, SENTENCE_TRANSFORMER_MODEL, GROQ_API_KEY
-from integrations.embeddings import get_embedding_model
+from config import CORS_ORIGINS, GROQ_API_KEY, OPENAI_API_KEY
+from integrations.embeddings import get_openai_client
 from services.restaurant_service import get_groq_client
 from models import ChatRequest
 from routes.chat import chat_endpoint
@@ -43,14 +43,16 @@ async def startup():
     await init_db()
     print("Database initialized.")
     
-    # Preload models (optional - skip if sentence-transformers not installed)
+    # Initialize OpenAI client for embeddings
     try:
-        print(f"Preloading sentence-transformer model: {SENTENCE_TRANSFORMER_MODEL}")
-        get_embedding_model()
-        print("Sentence-transformer model loaded.")
-    except ImportError as e:
-        print(f"⚠️ Sentence-transformer model not available: {e}")
-        print("⚠️ Some features may be limited. Install with: pip install sentence-transformers")
+        if OPENAI_API_KEY:
+            get_openai_client()
+            print("OpenAI client initialized for embeddings.")
+        else:
+            print("⚠️ OPENAI_API_KEY not set. Embeddings will fail. Set it in your .env file.")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize OpenAI client: {e}")
+        print("⚠️ Embedding features will not work. Check your OPENAI_API_KEY.")
 
     if GROQ_API_KEY:
         get_groq_client()
