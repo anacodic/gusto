@@ -1,0 +1,17 @@
+guardrails:
+  restaurant_safety:
+    name: "guardrail-restaurant-safety"
+    description: "Ensures restaurant recommendations are safe and appropriate"
+    content_policy:
+      filters:
+        - type: "HATE"
+          input_strength: "NONE"
+          output_strength: "MEDIUM"
+        - type: "MISCONDUCT"
+          input_strength: "NONE"
+          output_strength: "MEDIUM"
+        - type: "PROMPT_ATTACK"
+          input_strength: "NONE"
+          output_strength: "NONE"
+    blocked_input_messaging: "I apologize, but I cannot process that request. Please rephrase your question about restaurant recommendations."
+    blocked_outputs_messaging: "I apologize, but I cannot provide that response. Please modify your request and try again."

@@ -1,0 +1,109 @@
+{
+  "ranges": {
+    "ABV": {
+      "min": 0.0,
+      "max": 57.5,
+      "mean": 6.5266875195495775
+    },
+    "Astringency": {
+      "min": 0.0,
+      "max": 81.0,
+      "mean": 16.51579605880513
+    },
+    "Body": {
+      "min": 0.0,
+      "max": 175.0,
+      "mean": 46.1294964028777
+    },
+    "Alcohol": {
+      "min": 0.0,
+      "max": 139.0,
+      "mean": 17.055989990616204
+    },
+    "Bitter": {
+      "min": 0.0,
+      "max": 150.0,
+      "mean": 36.36440412887082
+    },
+    "Sweet": {
+      "min": 0.0,
+      "max": 263.0,
+      "mean": 58.2708789490147
+    },
+    "Sour": {
+      "min": 0.0,
+      "max": 284.0,
+      "mean": 33.14544885830466
+    },
+    "Salty": {
+      "min": 0.0,
+      "max": 48.0,
+      "mean": 1.0172036284016266
+    },
+    "Fruits": {
+      "min": 0.0,
+      "max": 175.0,
+      "mean": 38.52955896152643
+    },
+    "Hoppy": {
+      "min": 0.0,
+      "max": 172.0,
+      "mean": 40.92461682827651
+    },
+    "Spices": {
+      "min": 0.0,
+      "max": 184.0,
+      "mean": 18.34563653425086
+    },
+    "Malty": {
+      "min": 0.0,
+      "max": 239.0,
+      "mean": 75.33093525179856
+    }
+  },
+  "beer_styles": [
+    "Altbier",
+    "Barleywine",
+    "Bitter",
+    "Bi\u00e8re de Champagne",
+    "Blonde Ale",
+    "Bock",
+    "Braggot",
+    "Brett Beer",
+    "Brown Ale",
+    "California Common",
+    "Chile Beer",
+    "Cream Ale",
+    "Dubbel",
+    "Farmhouse Ale",
+    "Fruit and Field Beer",
+    "Gruit",
+    "Happoshu",
+    "Herb and Spice Beer",
+    "IPA",
+    "Kvass",
+    "K\u00f6lsch",
+    "Lager",
+    "Lambic",
+    "Low Alcohol Beer",
+    "Mild Ale",
+    "Old Ale",
+    "Pale Ale",
+    "Pilsner",
+    "Porter",
+    "Pumpkin Beer",
+    "Quadrupel (Quad)",
+    "Red Ale",
+    "Rye Beer",
+    "Scotch Ale",
+    "Scottish Ale",
+    "Smoked Beer",
+    "Sour",
+    "Stout",
+    "Strong Ale",
+    "Tripel",
+    "Wheat Beer",
+    "Wild Ale",
+    "Winter Warmer"
+  ]
+}

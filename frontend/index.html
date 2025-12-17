@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swaad - AI Restaurant Recommendations</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Fix for amazon-cognito-identity-js: define global as window (must be before any modules load)
+      var global = globalThis;
+      window.global = globalThis;
+      
+      console.log('index.html: Script executing, root element:', document.getElementById('root'));
+      console.log('index.html: Body background:', window.getComputedStyle(document.body).background);
+      console.log('index.html: global defined:', typeof global !== 'undefined', typeof window.global !== 'undefined');
+      
+      // Check for errors after module loads
+      window.addEventListener('error', (e) => {
+        console.error('index.html: Global error caught:', e.message, e.filename, e.lineno);
+        document.body.innerHTML += '<div style="position: fixed; top: 0; left: 0; right: 0; background: yellow; color: black; padding: 20px; z-index: 99999; font-size: 16px;"><strong>ERROR:</strong> ' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
+      });
+      
+      setTimeout(() => {
+        console.log('index.html: After 1s, body background:', window.getComputedStyle(document.body).background);
+        console.log('index.html: Root innerHTML:', document.getElementById('root')?.innerHTML?.substring(0, 100));
+        console.log('index.html: Checking if React mounted...');
+        
+        // If React hasn't rendered after 2 seconds, show error
+        if (!document.getElementById('root')?.innerHTML || document.getElementById('root')?.innerHTML === '') {
+          console.error('index.html: React did not render!');
+          document.body.innerHTML += '<div style="position: fixed; top: 50px; left: 0; right: 0; background: orange; color: black; padding: 20px; z-index: 99999; font-size: 16px;"><strong>WARNING:</strong> React did not render. Check console for errors.</div>';
+        }
+      }, 2000);
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+

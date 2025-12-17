@@ -1,0 +1,42 @@
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.3.0
+python-multipart>=0.0.6
+pydantic>=2.0.0,<2.5.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-dotenv>=1.0.0
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+email-validator>=2.0.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+cryptography>=41.0.0
+requests>=2.31.0
+# Menu text extraction - Google Gemini API
+# Required for menu image processing
+google-genai>=0.2.0
+
+# For Gemini API setup:
+# 1. Get API key from https://aistudio.google.com
+# 2. Set GEMINI_API_KEY environment variable or add to backend/.env file:
+#    GEMINI_API_KEY=your_api_key_here
+
+groq
+httpx
+pinecone>=5.0.0
+sentence-transformers>=2.7.0
+
+# Multi-Agent System (Strands Framework)
+# NOTE: Strands requires C++ compilation and may fail on some systems
+# The agent system will gracefully fall back to direct service calls if strands is unavailable
+# Install command from reference notebook:
+#   pip install strands-agents strands-agents-tools
+strands-agents>=0.1.0
+strands-agents-tools>=0.1.0
+
+# AWS SDK for Bedrock (required for multi-agent system)
+boto3>=1.34.0

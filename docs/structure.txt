@@ -1,0 +1,178 @@
+gusto/
+├── README.md                          # Main project overview
+├── compliance.md                      # Hackathon compliance documentation
+├── .env.example                       # Environment variables template
+├── requirements.txt                   # Root-level dependencies (if needed)
+│
+├── agents/                            # Multi-Agent System (Strands Framework)
+│   ├── README.md                      # Agent system documentation
+│   ├── orchestrator.py                # Main orchestrator agent
+│   │
+│   ├── yelp_agent.py                  # Yelp Discovery Agent
+│   ├── flavor_agent.py                # Taste/Flavor Analysis Agent
+│   ├── beverage_agent.py              # Beer Pairing Agent (from beer-buddy-ai)
+│   ├── review_agent.py                # Review Analysis Agent
+│   ├── budget_agent.py                # Budget/Price Filtering Agent
+│   │
+│   ├── tools/                         # Agent tools
+│   │   ├── yelp_tools.py              # Yelp API integration
+│   │   ├── taste_tools.py             # Taste vector calculations
+│   │   ├── beer_tools.py              # Beer recommendation ML
+│   │   └── allergy_tools.py           # Allergy filtering
+│   │
+│   ├── config/                        # Agent configurations
+│   │   ├── agent_configs.yaml         # Agent prompts & settings
+│   │   └── guardrails.yaml            # Bedrock guardrail configs
+│   │
+│   └── utils/                         # Agent utilities
+│       ├── guardrail.py                # Guardrail integration
+│       └── message_formatter.py       # Response formatting
+│
+├── backend/                           # FastAPI Backend
+│   ├── README.md
+│   ├── requirements.txt
+│   ├── .env.example
+│   ├── Dockerfile
+│   │
+│   ├── main.py                        # FastAPI app entry point
+│   ├── config.py                      # Configuration management
+│   ├── database.py                    # User data management
+│   ├── db.py                          # Database models & connection
+│   ├── models.py                      # Pydantic models
+│   │
+│   ├── routes/                        # API endpoints
+│   │   ├── __init__.py
+│   │   ├── chat.py                    # Main chat endpoint (uses agents)
+│   │   ├── users.py                   # User management
+│   │   ├── friends.py                 # Friends/social features
+│   │   ├── groups.py                  # Group recommendations
+│   │   └── collections.py             # Collections/saved restaurants
+│   │
+│   ├── services/                      # Business logic
+│   │   ├── restaurant_service.py      # Restaurant operations
+│   │   ├── taste_service.py           # Taste analysis service
+│   │   ├── beer_service.py            # Beer pairing service
+│   │   └── recommendation_service.py  # Recommendation logic
+│   │
+│   ├── middleware/                    # Middleware
+│   │   ├── __init__.py
+│   │   └── auth.py                    # Cognito authentication
+│   │
+│   ├── integrations/                  # External integrations
+│   │   ├── yelp_client.py              # Yelp API client
+│   │   ├── pinecone_client.py         # Pinecone vector DB
+│   │   ├── embeddings.py               # Embedding operations
+│   │   └── groq_client.py              # Groq AI client
+│   │
+│   ├── db_scripts/                    # Database scripts
+│   │   └── ...
+│   │
+│   └── tests/                         # Backend tests
+│       └── ...
+│
+├── frontend/                          # React/Vite Frontend
+│   ├── README.md
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── .env.example
+│   ├── index.html
+│   │
+│   ├── public/                        # Static assets
+│   │   └── ...
+│   │
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx
+│       ├── App.css
+│       ├── index.css
+│       │
+│       ├── auth/                      # Authentication
+│       │   ├── AuthContext.js
+│       │   └── cognitoConfig.js
+│       │
+│       ├── components/                # React components
+│       │   ├── common/                # Reusable components
+│       │   │   ├── Button.jsx
+│       │   │   ├── LoadingSpinner.jsx
+│       │   │   ├── Modal.jsx
+│       │   │   └── EmptyState.jsx
+│       │   │
+│       │   ├── restaurant/            # Restaurant components
+│       │   │   ├── RestaurantCard.jsx
+│       │   │   ├── TasteProfile.jsx
+│       │   │   ├── BeerPairing.jsx
+│       │   │   ├── AllergySafety.jsx
+│       │   │   └── RecommendedDishes.jsx
+│       │   │
+│       │   ├── taste/                 # Taste visualization
+│       │   │   ├── TasteBars.jsx
+│       │   │   └── TasteChart.jsx
+│       │   │
+│       │   ├── collection/            # Collections
+│       │   │   ├── CollectionCard.jsx
+│       │   │   └── CreateCollectionModal.jsx
+│       │   │
+│       │   ├── group/                 # Groups
+│       │   │   ├── GroupCard.jsx
+│       │   │   ├── CreateGroupModal.jsx
+│       │   │   └── GroupCompatibility.jsx
+│       │   │
+│       │   ├── chat/                  # Chat interface
+│       │   │   ├── ChatInterface.jsx
+│       │   │   ├── MessageBubble.jsx
+│       │   │   ├── AgentActivity.jsx
+│       │   │   └── ChatInput.jsx
+│       │   │
+│       │   ├── Navigation.jsx
+│       │   ├── Login.jsx
+│       │   └── Signup.jsx
+│       │
+│       ├── pages/                     # Page components
+│       │   ├── Discover.jsx           # Page 1: Discover feed
+│       │   ├── Collections.jsx        # Page 2: Collections
+│       │   ├── CollectionDetail.jsx
+│       │   ├── Chat.jsx               # Page 3: Chat interface
+│       │   ├── Profile.jsx            # Page 4: Profile & taste
+│       │   ├── Groups.jsx             # Page 5: Groups
+│       │   ├── GroupRecommendations.jsx # Page 6: Group results
+│       │   ├── RestaurantDetails.jsx  # Page 7: Restaurant details
+│       │   └── Friends.jsx            # Page 8: Friends & social
+│       │
+│       ├── hooks/                     # Custom React hooks
+│       │   ├── useRestaurants.js
+│       │   ├── useCollections.js
+│       │   ├── useGroups.js
+│       │   ├── useChat.js
+│       │   └── useProfile.js
+│       │
+│       ├── utils/                     # Utilities
+│       │   ├── api.js                 # API client
+│       │   ├── constants.js
+│       │   ├── formatters.js
+│       │   └── validators.js
+│       │
+│       └── styles/                    # Global styles
+│           ├── variables.css
+│           └── mixins.css
+│
+├── data/                              # Data files
+│   ├── ingredient-flavor.csv          # Ingredient taste profiles
+│   ├── recipes_with_flavour_profiles.csv  # Legacy recipe data
+│   ├── beer_profile_and_ratings.csv   # Beer dataset (from beer-buddy)
+│   └── beer_ranges.json               # Beer ranges
+│
+├── notebooks/                         # Jupyter notebooks
+│   ├── yelp-hackathon-multi-agent.ipynb  # Main hackathon notebook
+│   └── beer_expected.ipynb            # Beer analysis notebook
+│
+├── docs/                              # Documentation
+│   ├── ARCHITECTURE.md                # System architecture
+│   ├── API_DOCUMENTATION.md           # API reference
+│   ├── AGENT_DOCUMENTATION.md         # Agent system docs
+│   └── DEPLOYMENT.md                  # Deployment guide
+│
+└── scripts/                           # Utility scripts
+    ├── start.sh                       # Start all services
+    ├── start_backend.sh
+    ├── start_frontend.sh
+    └── test_api.sh
