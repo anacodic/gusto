@@ -32,6 +32,12 @@ function RestaurantModal({ restaurant, isOpen, onClose }) {
           <h2 className="modal-title">{restaurant.name}</h2>
           <div className="modal-meta">
             <span className="rating">⭐ {ratingDisplay}</span>
+            {restaurant.review_count && (
+              <>
+                <span className="separator">|</span>
+                <span className="reviews">({restaurant.review_count} reviews)</span>
+              </>
+            )}
             <span className="separator">|</span>
             <span className="location">
               📍 {restaurant.location?.city || restaurant.location?.formatted_address?.split(',')[0] || 'Location'}
@@ -39,15 +45,46 @@ function RestaurantModal({ restaurant, isOpen, onClose }) {
             <span className="separator">|</span>
             <span className="price">{priceDisplay}</span>
           </div>
+          
+          {restaurant.location?.formatted_address && (
+            <div className="modal-address">
+              📍 {restaurant.location.formatted_address}
+            </div>
+          )}
+          
+          {restaurant.phone && (
+            <div className="modal-phone">
+              📞 {restaurant.phone}
+            </div>
+          )}
         </div>
 
         <div className="modal-body">
           <div className="modal-section">
             <h3>About</h3>
             <p className="modal-description">
-              {restaurant.description || `A delightful restaurant offering amazing flavors and great dining experience.`}
+              {restaurant.description || restaurant.summary || restaurant.contextual_info?.summary || `A delightful restaurant offering amazing flavors and great dining experience.`}
             </p>
           </div>
+          
+          {restaurant.photos && restaurant.photos.length > 1 && (
+            <div className="modal-section">
+              <h3>Photos</h3>
+              <div className="modal-photos-grid">
+                {restaurant.photos.slice(1, 5).map((photo, idx) => (
+                  <img 
+                    key={idx}
+                    src={photo} 
+                    alt={`${restaurant.name} photo ${idx + 2}`}
+                    className="modal-photo-thumb"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {restaurant.cuisine_types && restaurant.cuisine_types.length > 0 && (
             <div className="modal-section">
@@ -79,8 +116,8 @@ function RestaurantModal({ restaurant, isOpen, onClose }) {
             </div>
           )}
 
-          {restaurant.url && (
-            <div className="modal-section">
+          <div className="modal-section modal-actions">
+            {restaurant.url && (
               <a 
                 href={restaurant.url} 
                 target="_blank" 
@@ -89,8 +126,18 @@ function RestaurantModal({ restaurant, isOpen, onClose }) {
               >
                 View on Yelp →
               </a>
-            </div>
-          )}
+            )}
+            {restaurant.menu_url && (
+              <a 
+                href={restaurant.menu_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="menu-link"
+              >
+                View Menu →
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>

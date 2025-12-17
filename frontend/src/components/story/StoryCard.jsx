@@ -1,39 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import RestaurantModal from './RestaurantModal';
 import './StoryCard.css';
 
 function StoryCard({ restaurant, index }) {
-  const [saved, setSaved] = useState(false);
   const [showModal, setShowModal] = useState(false);
-
-  // Load saved state from localStorage on mount
-  useEffect(() => {
-    const savedRestaurants = JSON.parse(localStorage.getItem('savedRestaurants') || '[]');
-    const isSaved = savedRestaurants.some(r => 
-      (r.id && restaurant.id && r.id === restaurant.id) || 
-      (r.name && restaurant.name && r.name === restaurant.name)
-    );
-    setSaved(isSaved);
-  }, [restaurant]);
-
-  const handleSave = () => {
-    const savedRestaurants = JSON.parse(localStorage.getItem('savedRestaurants') || '[]');
-    
-    if (saved) {
-      // Remove from saved
-      const updated = savedRestaurants.filter(r => 
-        !((r.id && restaurant.id && r.id === restaurant.id) || 
-          (r.name && restaurant.name && r.name === restaurant.name))
-      );
-      localStorage.setItem('savedRestaurants', JSON.stringify(updated));
-      setSaved(false);
-    } else {
-      // Add to saved
-      savedRestaurants.push(restaurant);
-      localStorage.setItem('savedRestaurants', JSON.stringify(savedRestaurants));
-      setSaved(true);
-    }
-  };
 
   const handleViewDetails = () => {
     setShowModal(true);
@@ -86,6 +56,12 @@ function StoryCard({ restaurant, index }) {
         <h3 className="restaurant-name">{restaurant.name}</h3>
         <div className="restaurant-meta">
           <span className="rating">⭐ {ratingDisplay}</span>
+          {restaurant.review_count && (
+            <>
+              <span className="separator">|</span>
+              <span className="reviews">({restaurant.review_count} reviews)</span>
+            </>
+          )}
           <span className="separator">|</span>
           <span className="location">
             📍 {restaurant.location?.city || restaurant.location?.formatted_address?.split(',')[0] || 'Location'}
@@ -95,7 +71,7 @@ function StoryCard({ restaurant, index }) {
         </div>
 
         <p className="restaurant-description">
-          {restaurant.description || `A hidden gem where flavors come alive...`}
+          {restaurant.description || restaurant.summary || restaurant.contextual_info?.summary || `A hidden gem where flavors come alive...`}
         </p>
 
         {dishes.length > 0 && (
@@ -120,12 +96,6 @@ function StoryCard({ restaurant, index }) {
         )}
 
         <div className="card-actions">
-          <button 
-            className={`save-btn ${saved ? 'saved' : ''}`}
-            onClick={handleSave}
-          >
-            {saved ? '❤️ Saved' : '❤️ Save'}
-          </button>
           <button 
             className="details-btn"
             onClick={handleViewDetails}

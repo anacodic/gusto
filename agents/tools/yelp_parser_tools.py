@@ -165,15 +165,38 @@ def parse_yelp_response_tool(yelp_response_json: str) -> str:
                             {"name": "Popular Dish", "similarity": 65.0}
                         ]
                     
+                    # Extract additional fields from Yelp
+                    review_count = business.get("review_count") or business.get("reviewCount", 0)
+                    phone = business.get("phone")
+                    if phone and isinstance(phone, (int, float)):
+                        phone = str(int(phone))
+                    
+                    # Extract summary from contextual_info
+                    summary = None
+                    if contextual_info:
+                        summary = contextual_info.get("summary")
+                    
+                    # Extract review snippets
+                    review_snippet = business.get("review_snippet") or business.get("reviewSnippet", "")
+                    
                     restaurant = {
                         "id": business.get("id") or business.get("encid", ""),
                         "name": name,
                         "url": url,
+                        "rating": float(rating) if rating else None,
                         "avg_rating": float(rating) if rating else None,
+                        "review_count": int(review_count) if review_count else None,
                         "price_range": price_range,
                         "cuisine_types": cuisine_types,
                         "location": location_dict,
                         "coordinates": coordinates,
+                        "phone": phone,
+                        "summary": summary,
+                        "description": summary or review_snippet,  # Use summary or review snippet as description
+                        "contextual_info": {
+                            "summary": summary,
+                            "review_snippet": review_snippet
+                        } if summary or review_snippet else None,
                         "menu_items": [],  # Yelp doesn't provide detailed menu items
                         "popular_dishes": [d.get("name") for d in recommended_dishes],
                         "taste_vector": [0.0] * 6,  # Will be calculated if needed
